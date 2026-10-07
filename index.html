@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Sahu Business Hub</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Screen 1: Splash Overlay -->
+  <div id="splash-screen" class="splash-screen">
+    <div class="splash-card">
+      <div class="store-badge">🏪</div>
+      <h1>Sahu Grocery Store</h1>
+      <p>Management System</p>
+    </div>
+  </div>
+
+  <!-- Screen 2: Command Dashboard -->
+  <main id="dashboard" class="app-container hidden">
+    <header class="header">
+      <h2>Sahu Business Hub</h2>
+      <span class="status-indicator">● Active</span>
+    </header>
+
+    <!-- Top Earnings Cards -->
+    <section class="summary-grid">
+      <div class="summary-card">
+        <span class="label">Weekly</span>
+        <h3 id="weekly-profit">₹ 0</h3>
+      </div>
+      <div class="summary-card">
+        <span class="label">Monthly</span>
+        <h3 id="monthly-profit">₹ 0</h3>
+      </div>
+    </section>
+
+    <!-- Category Hub -->
+    <section class="categories-list">
+      <div class="category-item" onclick="openModule('grocery')">
+        <div class="cat-meta">
+          <span class="cat-icon">🛒</span>
+          <span class="cat-name">Grocery</span>
+        </div>
+        <div class="cat-stats">
+          <span class="profit-val" id="grocery-profit">₹ 0</span>
+          <span class="chevron">›</span>
+        </div>
+      </div>
+
+      <div class="category-item" onclick="openModule('petrol')">
+        <div class="cat-meta">
+          <span class="cat-icon">⛽</span>
+          <span class="cat-name">Petrol & Diesel</span>
+        </div>
+        <div class="cat-stats">
+          <span class="profit-val" id="petrol-profit">₹ 0</span>
+          <span class="chevron">›</span>
+        </div>
+      </div>
+
+      <div class="category-item" onclick="openModule('fertilizer')">
+        <div class="cat-meta">
+          <span class="cat-icon">🌱</span>
+          <span class="cat-name">Fertilizer</span>
+        </div>
+        <div class="cat-stats">
+          <span class="profit-val" id="fertilizer-profit">₹ 0</span>
+          <span class="chevron">›</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Future Profit Pool Card -->
+    <section class="future-card">
+      <div class="future-meta">
+        <span class="future-title">Future Profits</span>
+        <p class="future-sub">Expected earnings on active shelf stock</p>
+      </div>
+      <div class="future-val" id="future-profit">₹ 0</div>
+    </section>
+  </main>
+
+  <!-- Screen 3: Shared Inventory Module (Grocery / Petrol / Fertilizer) -->
+  <main id="module-screen" class="app-container hidden">
+    <header class="sub-header">
+      <button onclick="backToDashboard()" class="icon-btn">‹</button>
+      <h2 id="module-title">Inventory</h2>
+      <div style="width: 36px;"></div>
+    </header>
+
+    <!-- Search Box -->
+    <div class="search-box">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="module-search" placeholder="Search product name...">
+    </div>
+
+    <!-- Active vs Sold Out Tabs -->
+    <div class="tab-bar">
+      <button id="tab-active" class="tab-btn active" onclick="switchTab('ACTIVE')">
+        Active Stock (<span id="count-active">0</span>)
+      </button>
+      <button id="tab-sold" class="tab-btn" onclick="switchTab('SOLD')">
+        Sold Out (<span id="count-sold">0</span>)
+      </button>
+    </div>
+
+    <!-- Stock Cards List -->
+    <div id="module-items-list" class="items-list"></div>
+
+    <!-- Sticky Bottom Add Button -->
+    <div class="bottom-action-bar">
+      <button id="open-add-modal-btn" class="primary-btn" onclick="openStockModal()">+ Add Stock Entry</button>
+    </div>
+  </main>
+
+  <!-- Add / Restock Modal -->
+  <div id="add-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-heading">New Stock Entry</h3>
+        <button onclick="closeModal()" class="close-btn">✕</button>
+      </div>
+
+      <!-- Quick Preset Pills (for Petrol / Fertilizer) -->
+      <div id="preset-pills" class="presets-row hidden"></div>
+
+      <form id="stock-form" onsubmit="handleFormSubmit(event)">
+        <div class="input-group">
+          <label>Product / Item Name</label>
+          <input type="text" id="form-name" placeholder="Enter name" required autocomplete="off">
+        </div>
+
+        <!-- Mode A: Grocery & Fertilizer Inputs (Cost Price & Selling Price) -->
+        <div id="mode-standard-inputs" class="input-row">
+          <div class="input-group">
+            <label>Cost Price (₹)</label>
+            <input type="number" id="form-cost" placeholder="200" inputmode="numeric">
+          </div>
+          <div class="input-group">
+            <label>Selling Price (₹)</label>
+            <input type="number" id="form-sales" placeholder="250" inputmode="numeric">
+          </div>
+        </div>
+
+        <!-- Mode B: Petrol & Diesel Inputs (Liters & Profit Per Liter) -->
+        <div id="mode-fuel-inputs" class="input-row hidden">
+          <div class="input-group">
+            <label>Total Liters (L)</label>
+            <input type="number" id="form-liters" placeholder="45" step="any" inputmode="decimal">
+          </div>
+          <div class="input-group">
+            <label>Profit / Liter (₹)</label>
+            <input type="number" id="form-profit-per-liter" placeholder="30" step="any" inputmode="decimal">
+          </div>
+        </div>
+
+        <div class="profit-preview">
+          <span>Expected Profit:</span>
+          <strong id="form-profit-preview">₹ 0</strong>
+        </div>
+
+        <button type="submit" class="submit-btn">Save to Active Stock</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
