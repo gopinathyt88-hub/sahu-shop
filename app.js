@@ -1,14 +1,15 @@
-// Storage Key
-const STORAGE_KEY = "sahu_business_hub_v2";
+// Storage configuration with automatic backward compatibility
+const STORAGE_KEY = "sahu_business_hub_v3";
 
 let appState = {
-  products: [] // { id, category, name, cost, sales, liters, profitPerLiter, profit, status, dateAdded, dateSold }
+  batches: [] // { id, category, name, cost, sales, liters, profitPerLiter, profit, status: 'ACTIVE'|'SOLD', dateAdded, dateSold }
 };
 
 let currentCategory = "grocery";
-let currentTab = "ACTIVE";
+let currentCategoryTab = "ACTIVE";
+let selectedProductName = "";
 
-// Initialize App
+// Initialize Application
 document.addEventListener("DOMContentLoaded", () => {
   loadData();
   setupLiveCalculators();
@@ -27,18 +28,23 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }, 900);
 
-  // Live Search Filter
+  // Live Search listener
   document.getElementById("module-search").addEventListener("input", renderModuleList);
 });
 
-// Storage
+// Load & Save Data
 function loadData() {
-  const saved = localStorage.getItem(STORAGE_KEY);
+  let saved = localStorage.getItem(STORAGE_KEY);
+  if (!saved) {
+    // Check previous storage keys so no test entries are lost
+    saved = localStorage.getItem("sahu_business_hub_v2") || localStorage.getItem("sahu_shop_data_v1");
+  }
   if (saved) {
     try {
-      appState = JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+      appState.batches = parsed.batches || parsed.products || [];
     } catch (e) {
-      console.error("Storage error", e);
+      console.error("Storage loading error:", e);
     }
   }
 }
@@ -48,14 +54,16 @@ function saveData() {
   updateDashboard();
 }
 
-// Navigation
+// Navigation Handlers
 function openModule(category) {
   currentCategory = category;
-  currentTab = "ACTIVE";
+  currentCategoryTab = "ACTIVE";
+  selectedProductName = "";
+
   document.getElementById("dashboard").classList.add("hidden");
+  document.getElementById("product-detail-screen").classList.add("hidden");
   document.getElementById("module-screen").classList.remove("hidden");
 
-  // Title
   const titles = {
     grocery: "Grocery Inventory",
     petrol: "Petrol & Diesel Tracker",
@@ -63,7 +71,6 @@ function openModule(category) {
   };
   document.getElementById("module-title").textContent = titles[category];
 
-  // Reset tab buttons
   document.getElementById("tab-active").classList.add("active");
   document.getElementById("tab-sold").classList.remove("active");
   document.getElementById("module-search").value = "";
@@ -73,12 +80,13 @@ function openModule(category) {
 
 function backToDashboard() {
   document.getElementById("module-screen").classList.add("hidden");
+  document.getElementById("product-detail-screen").classList.add("hidden");
   document.getElementById("dashboard").classList.remove("hidden");
   updateDashboard();
 }
 
-function switchTab(tab) {
-  currentTab = tab;
+function switchCategoryTab(tab) {
+  currentCategoryTab = tab;
   if (tab === "ACTIVE") {
     document.getElementById("tab-active").classList.add("active");
     document.getElementById("tab-sold").classList.remove("active");
@@ -89,7 +97,23 @@ function switchTab(tab) {
   renderModuleList();
 }
 
-// Live Math Previews
+// Open Dedicated Product History Screen
+function openProductDetail(productName) {
+  selectedProductName = productName;
+  document.getElementById("module-screen").classList.add("hidden");
+  document.getElementById("product-detail-screen").classList.remove("hidden");
+  document.getElementById("detail-product-name").textContent = productName;
+
+  renderProductDetail();
+}
+
+function backToModule() {
+  document.getElementById("product-detail-screen").classList.add("hidden");
+  document.getElementById("module-screen").classList.remove("hidden");
+  renderModuleList();
+}
+
+// Live Math Calculator for Modal
 function setupLiveCalculators() {
   const cost = document.getElementById("form-cost");
   const sales = document.getElementById("form-sales");
@@ -115,37 +139,49 @@ function setupLiveCalculators() {
   ppl.addEventListener("input", calc);
 }
 
-// Modal Handlers
-function openStockModal(presetName = "") {
-  const modal = document.getElementById("add-modal");
+// Modal Handlers (New & Restock)
+function openNewStockModal() {
+  configureModalUi(null, "");
+}
+
+function openRestockCurrentModal() {
+  configureModalUi(null, selectedProductName);
+}
+
+function openEditBatchModal(batchId, event) {
+  if (event) event.stopPropagation();
+  const batch = appState.batches.find((b) => b.id === batchId);
+  if (!batch) return;
+  configureModalUi(batch, batch.name);
+}
+
+function configureModalUi(batchToEdit, presetName) {
+  const modal = document.getElementById("stock-modal");
   const heading = document.getElementById("modal-heading");
+  const submitBtn = document.getElementById("modal-submit-btn");
+  const editIdInput = document.getElementById("edit-batch-id");
   const nameInput = document.getElementById("form-name");
   const pillsContainer = document.getElementById("preset-pills");
   const standardInputs = document.getElementById("mode-standard-inputs");
   const fuelInputs = document.getElementById("mode-fuel-inputs");
 
-  // Reset form
   document.getElementById("stock-form").reset();
-  document.getElementById("form-profit-preview").textContent = "₹ 0";
+  editIdInput.value = batchToEdit ? batchToEdit.id : "";
 
-  // Check category mode
+  // Set category mode
   if (currentCategory === "petrol") {
-    heading.textContent = presetName ? `Restock ${presetName}` : "New Fuel Entry";
     standardInputs.classList.add("hidden");
     fuelInputs.classList.remove("hidden");
 
-    // Fuel quick buttons
     pillsContainer.innerHTML = `
       <button type="button" class="preset-pill" onclick="selectPreset('Petrol')">Petrol</button>
       <button type="button" class="preset-pill" onclick="selectPreset('Diesel')">Diesel</button>
     `;
     pillsContainer.classList.remove("hidden");
   } else if (currentCategory === "fertilizer") {
-    heading.textContent = presetName ? `Restock ${presetName}` : "New Fertilizer Entry";
     fuelInputs.classList.add("hidden");
     standardInputs.classList.remove("hidden");
 
-    // Fertilizer quick buttons
     pillsContainer.innerHTML = `
       <button type="button" class="preset-pill" onclick="selectPreset('Urea')">Urea</button>
       <button type="button" class="preset-pill" onclick="selectPreset('DAP')">DAP</button>
@@ -153,17 +189,36 @@ function openStockModal(presetName = "") {
     `;
     pillsContainer.classList.remove("hidden");
   } else {
-    heading.textContent = presetName ? `Restock ${presetName}` : "New Grocery Entry";
     fuelInputs.classList.add("hidden");
     standardInputs.classList.remove("hidden");
     pillsContainer.classList.add("hidden");
   }
 
+  // Pre-fill fields if Editing
+  if (batchToEdit) {
+    heading.textContent = `Edit Batch (${batchToEdit.name})`;
+    submitBtn.textContent = "Save Changes";
+    nameInput.value = batchToEdit.name;
+
+    if (currentCategory === "petrol") {
+      document.getElementById("form-liters").value = batchToEdit.liters;
+      document.getElementById("form-profit-per-liter").value = batchToEdit.profitPerLiter;
+    } else {
+      document.getElementById("form-cost").value = batchToEdit.cost;
+      document.getElementById("form-sales").value = batchToEdit.sales;
+    }
+    document.getElementById("form-profit-preview").textContent = `₹ ${batchToEdit.profit}`;
+  } else {
+    // New Stock
+    heading.textContent = presetName ? `Restock: ${presetName}` : "New Stock Entry";
+    submitBtn.textContent = "Save to Active Stock";
+    nameInput.value = presetName;
+    document.getElementById("form-profit-preview").textContent = "₹ 0";
+  }
+
   modal.classList.remove("hidden");
 
-  // Autofill if tapping an existing card
-  if (presetName) {
-    nameInput.value = presetName;
+  if (presetName && !batchToEdit) {
     if (currentCategory === "petrol") {
       document.getElementById("form-liters").focus();
     } else {
@@ -184,12 +239,13 @@ function selectPreset(name) {
 }
 
 function closeModal() {
-  document.getElementById("add-modal").classList.add("hidden");
+  document.getElementById("stock-modal").classList.add("hidden");
 }
 
-// Form Submit (Save / Auto-Rollover)
-function handleFormSubmit(e) {
+// Form Submission (Add New Batch or Update Existing)
+function handleFormSave(e) {
   e.preventDefault();
+  const editId = document.getElementById("edit-batch-id").value;
   const name = document.getElementById("form-name").value.trim();
   if (!name) return;
 
@@ -209,106 +265,152 @@ function handleFormSubmit(e) {
     profit = Math.round(sales - cost);
   }
 
-  // AUTO-ROLLOVER RULE:
-  // If this item already exists in ACTIVE status inside this category, mark the old one as SOLD
-  const existingActive = appState.products.find(
-    (p) => p.category === currentCategory && p.status === "ACTIVE" && p.name.toLowerCase() === name.toLowerCase()
-  );
-
-  if (existingActive) {
-    existingActive.status = "SOLD";
-    existingActive.dateSold = new Date().toISOString();
+  if (editId) {
+    // EDIT EXISTING BATCH
+    const batch = appState.batches.find((b) => b.id === editId);
+    if (batch) {
+      batch.name = name;
+      batch.cost = cost;
+      batch.sales = sales;
+      batch.liters = liters;
+      batch.profitPerLiter = profitPerLiter;
+      batch.profit = profit;
+    }
+  } else {
+    // ADD NEW BATCH (Does NOT overwrite or auto-sell older batches)
+    appState.batches.unshift({
+      id: "batch_" + Date.now(),
+      category: currentCategory,
+      name,
+      cost,
+      sales,
+      liters,
+      profitPerLiter,
+      profit,
+      status: "ACTIVE",
+      dateAdded: new Date().toISOString(),
+      dateSold: null
+    });
   }
-
-  // Add the new active stock entry
-  appState.products.unshift({
-    id: "item_" + Date.now(),
-    category: currentCategory,
-    name,
-    cost,
-    sales,
-    liters,
-    profitPerLiter,
-    profit,
-    status: "ACTIVE",
-    dateAdded: new Date().toISOString(),
-    dateSold: null
-  });
 
   saveData();
   closeModal();
-  renderModuleList();
-}
 
-// Mark an item sold manually
-function markAsSold(id, event) {
-  if (event) event.stopPropagation(); // prevent opening edit modal
-  const item = appState.products.find((p) => p.id === id);
-  if (item) {
-    item.status = "SOLD";
-    item.dateSold = new Date().toISOString();
-    saveData();
+  if (selectedProductName) {
+    selectedProductName = name; // Update in case name was edited
+    renderProductDetail();
+  } else {
     renderModuleList();
   }
 }
 
-// Render Items List
+// Delete Batch Handler
+function deleteBatch(batchId, event) {
+  if (event) event.stopPropagation();
+  if (!confirm("Are you sure you want to delete this batch entry? This cannot be undone.")) {
+    return;
+  }
+
+  appState.batches = appState.batches.filter((b) => b.id !== batchId);
+  saveData();
+
+  if (selectedProductName) {
+    renderProductDetail();
+  } else {
+    renderModuleList();
+  }
+}
+
+// Mark Single Batch Sold
+function markBatchSold(batchId, event) {
+  if (event) event.stopPropagation();
+  const batch = appState.batches.find((b) => b.id === batchId);
+  if (batch) {
+    batch.status = "SOLD";
+    batch.dateSold = new Date().toISOString();
+    saveData();
+
+    if (selectedProductName) {
+      renderProductDetail();
+    } else {
+      renderModuleList();
+    }
+  }
+}
+
+// Render Category Level List (Grouped by Product Name)
 function renderModuleList() {
   const container = document.getElementById("module-items-list");
   const query = document.getElementById("module-search").value.toLowerCase().trim();
 
-  // Filter items by category
-  const categoryItems = appState.products.filter((p) => p.category === currentCategory);
-  const activeItems = categoryItems.filter((p) => p.status === "ACTIVE");
-  const soldItems = categoryItems.filter((p) => p.status === "SOLD");
+  const categoryBatches = appState.batches.filter((b) => b.category === currentCategory);
 
-  document.getElementById("count-active").textContent = activeItems.length;
-  document.getElementById("count-sold").textContent = soldItems.length;
+  // Group batches by product name
+  const productMap = {};
+  categoryBatches.forEach((batch) => {
+    const key = batch.name.toLowerCase();
+    if (!productMap[key]) {
+      productMap[key] = {
+        displayName: batch.name,
+        activeBatches: [],
+        soldBatches: []
+      };
+    }
+    if (batch.status === "ACTIVE") {
+      productMap[key].activeBatches.push(batch);
+    } else {
+      productMap[key].soldBatches.push(batch);
+    }
+  });
 
-  let displayItems = currentTab === "ACTIVE" ? activeItems : soldItems;
+  const productsList = Object.values(productMap);
+
+  // Tab counters (Total unique products in active vs sold)
+  const activeProducts = productsList.filter((p) => p.activeBatches.length > 0);
+  const soldProducts = productsList.filter((p) => p.soldBatches.length > 0 && p.activeBatches.length === 0);
+
+  document.getElementById("count-active").textContent = activeProducts.length;
+  document.getElementById("count-sold").textContent = soldProducts.length;
+
+  let displayProducts = currentCategoryTab === "ACTIVE" ? activeProducts : soldProducts;
 
   if (query) {
-    displayItems = displayItems.filter((p) => p.name.toLowerCase().includes(query));
+    displayProducts = displayProducts.filter((p) => p.displayName.toLowerCase().includes(query));
   }
 
-  if (displayItems.length === 0) {
+  if (displayProducts.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
-        ${query ? "No items matching your search." : currentTab === "ACTIVE" ? "No active stock right now. Tap [+ Add Stock Entry] below." : "No sold out history recorded yet."}
+        ${query ? "No items matching your search." : currentCategoryTab === "ACTIVE" ? "No active stock items. Tap [+ Add New Stock] to begin!" : "No completed items yet."}
       </div>
     `;
     return;
   }
 
-  container.innerHTML = displayItems
-    .map((item) => {
-      const isSold = item.status === "SOLD";
-      const soldDateFormatted = item.dateSold
-        ? new Date(item.dateSold).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
-        : "";
+  container.innerHTML = displayProducts
+    .map((prod) => {
+      const activeCount = prod.activeBatches.length;
+      const futureProfitSum = prod.activeBatches.reduce((acc, b) => acc + b.profit, 0);
+      const realizedProfitSum = prod.soldBatches.reduce((acc, b) => acc + b.profit, 0);
 
-      // Price info display
-      let detailsHtml = "";
-      if (item.category === "petrol") {
-        detailsHtml = `<span>${item.liters}L × <strong>₹${item.profitPerLiter}/L</strong></span>`;
-      } else {
-        detailsHtml = `<span>Cost: <strong>₹${item.cost}</strong></span> <span>Sales: <strong>₹${item.sales}</strong></span>`;
-      }
+      const safeName = prod.displayName.replace(/'/g, "\\'");
 
-      // Tapping card triggers restock modal with name pre-filled
       return `
-      <div class="stock-card" onclick="openStockModal('${escapeHtml(item.name)}')">
+      <div class="stock-card" onclick="openProductDetail('${safeName}')">
         <div class="stock-card-top">
-          <span class="product-title">${item.name}</span>
-          <span class="stock-badge-profit">+₹ ${item.profit}</span>
+          <div>
+            <span class="product-title">${prod.displayName}</span>
+            <span class="batch-sub-badge">(${activeCount > 0 ? activeCount + " active batches" : "All sold"})</span>
+          </div>
+          ${
+            activeCount > 0
+              ? `<span class="stock-badge-future">+₹ ${futureProfitSum}</span>`
+              : `<span class="stock-badge-profit">₹ ${realizedProfitSum}</span>`
+          }
         </div>
         <div class="stock-card-bottom">
-          <div class="price-details">${detailsHtml}</div>
-          ${
-            !isSold
-              ? `<button class="sold-btn" onclick="markAsSold('${item.id}', event)">✓ Mark Sold</button>`
-              : `<span class="sold-meta">Sold: ${soldDateFormatted}</span>`
-          }
+          <span style="font-size: 0.8rem; color: #94a3b8;">Tap to open batches & ledger</span>
+          <span class="chevron">›</span>
         </div>
       </div>
     `;
@@ -316,12 +418,68 @@ function renderModuleList() {
     .join("");
 }
 
-// Utility to escape HTML names
-function escapeHtml(text) {
-  return text.replace(/'/g, "\\'");
+// Render Dedicated Product Ledger
+function renderProductDetail() {
+  const container = document.getElementById("detail-batches-list");
+  const relevantBatches = appState.batches.filter(
+    (b) => b.category === currentCategory && b.name.toLowerCase() === selectedProductName.toLowerCase()
+  );
+
+  const activeBatches = relevantBatches.filter((b) => b.status === "ACTIVE");
+  const soldBatches = relevantBatches.filter((b) => b.status === "SOLD");
+
+  const futureTotal = activeBatches.reduce((acc, b) => acc + b.profit, 0);
+  const realizedTotal = soldBatches.reduce((acc, b) => acc + b.profit, 0);
+
+  // Update Detail Header Cards
+  document.getElementById("detail-active-count").textContent = activeBatches.length;
+  document.getElementById("detail-future-profit").textContent = `₹ ${futureTotal}`;
+  document.getElementById("detail-realized-profit").textContent = `₹ ${realizedTotal}`;
+
+  if (relevantBatches.length === 0) {
+    container.innerHTML = `<div class="empty-state">No batches recorded for this item.</div>`;
+    return;
+  }
+
+  container.innerHTML = relevantBatches
+    .map((batch, index) => {
+      const isSold = batch.status === "SOLD";
+      const addedDate = new Date(batch.dateAdded).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+      const soldDate = batch.dateSold
+        ? new Date(batch.dateSold).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+        : null;
+
+      let detailsHtml = "";
+      if (batch.category === "petrol") {
+        detailsHtml = `<span>${batch.liters}L × <strong>₹${batch.profitPerLiter}/L</strong></span>`;
+      } else {
+        detailsHtml = `<span>Cost: <strong>₹${batch.cost}</strong></span> <span>Sell: <strong>₹${batch.sales}</strong></span>`;
+      }
+
+      return `
+      <div class="stock-card">
+        <div class="stock-card-top">
+          <div>
+            <span style="font-weight: 600; font-size: 0.95rem; color: #e2e8f0;">Batch #${relevantBatches.length - index}</span>
+            <span class="batch-sub-badge">${isSold ? "Sold: " + soldDate : "Added: " + addedDate}</span>
+          </div>
+          <span class="${isSold ? "stock-badge-profit" : "stock-badge-future"}">+₹ ${batch.profit}</span>
+        </div>
+        <div class="stock-card-bottom" style="margin-top: 6px;">
+          <div class="price-details">${detailsHtml}</div>
+          <div class="batch-actions">
+            ${!isSold ? `<button class="sold-btn" onclick="markBatchSold('${batch.id}', event)">✓ Sold</button>` : ""}
+            <button class="action-icon-btn" title="Edit Batch" onclick="openEditBatchModal('${batch.id}', event)">✏️</button>
+            <button class="action-icon-btn danger" title="Delete Batch" onclick="deleteBatch('${batch.id}', event)">🗑️</button>
+          </div>
+        </div>
+      </div>
+    `;
+    })
+    .join("");
 }
 
-// Compute Dashboard Numbers across ALL categories
+// Compute Aggregated Totals Across All Categories
 function updateDashboard() {
   const now = new Date();
   const currentMonth = now.getMonth();
@@ -337,25 +495,25 @@ function updateDashboard() {
   let fertilizerProfit = 0;
   let futureProfit = 0;
 
-  appState.products.forEach((p) => {
-    if (p.status === "ACTIVE") {
-      futureProfit += p.profit;
-    } else if (p.status === "SOLD" && p.dateSold) {
-      const soldDate = new Date(p.dateSold);
+  appState.batches.forEach((b) => {
+    if (b.status === "ACTIVE") {
+      futureProfit += b.profit;
+    } else if (b.status === "SOLD" && b.dateSold) {
+      const soldDate = new Date(b.dateSold);
 
-      // Per-category realized totals
-      if (p.category === "grocery") groceryProfit += p.profit;
-      if (p.category === "petrol") petrolProfit += p.profit;
-      if (p.category === "fertilizer") fertilizerProfit += p.profit;
+      // Realized profit by category
+      if (b.category === "grocery") groceryProfit += b.profit;
+      if (b.category === "petrol") petrolProfit += b.profit;
+      if (b.category === "fertilizer") fertilizerProfit += b.profit;
 
-      // Monthly total
+      // Realized profit by month
       if (soldDate.getMonth() === currentMonth && soldDate.getFullYear() === currentYear) {
-        monthlyProfit += p.profit;
+        monthlyProfit += b.profit;
       }
 
-      // Weekly total (rolling 7 days)
+      // Realized profit by rolling 7 days
       if (soldDate >= sevenDaysAgo && soldDate <= now) {
-        weeklyProfit += p.profit;
+        weeklyProfit += b.profit;
       }
     }
   });
