@@ -76,13 +76,13 @@
     <section class="future-card">
       <div class="future-meta">
         <span class="future-title">Future Profits</span>
-        <p class="future-sub">Expected earnings on active shelf stock</p>
+        <p class="future-sub">Expected earnings on all active shelf stock</p>
       </div>
       <div class="future-val" id="future-profit">₹ 0</div>
     </section>
   </main>
 
-  <!-- Screen 3: Shared Inventory Module (Grocery / Petrol / Fertilizer) -->
+  <!-- Screen 3: Category Inventory Screen (Item Grouped) -->
   <main id="module-screen" class="app-container hidden">
     <header class="sub-header">
       <button onclick="backToDashboard()" class="icon-btn">‹</button>
@@ -98,41 +98,77 @@
 
     <!-- Active vs Sold Out Tabs -->
     <div class="tab-bar">
-      <button id="tab-active" class="tab-btn active" onclick="switchTab('ACTIVE')">
+      <button id="tab-active" class="tab-btn active" onclick="switchCategoryTab('ACTIVE')">
         Active Stock (<span id="count-active">0</span>)
       </button>
-      <button id="tab-sold" class="tab-btn" onclick="switchTab('SOLD')">
+      <button id="tab-sold" class="tab-btn" onclick="switchCategoryTab('SOLD')">
         Sold Out (<span id="count-sold">0</span>)
       </button>
     </div>
 
-    <!-- Stock Cards List -->
+    <!-- Items List -->
     <div id="module-items-list" class="items-list"></div>
 
-    <!-- Sticky Bottom Add Button -->
+    <!-- Bottom Action Bar -->
     <div class="bottom-action-bar">
-      <button id="open-add-modal-btn" class="primary-btn" onclick="openStockModal()">+ Add Stock Entry</button>
+      <button class="primary-btn" onclick="openNewStockModal()">+ Add New Stock</button>
     </div>
   </main>
 
-  <!-- Add / Restock Modal -->
-  <div id="add-modal" class="modal-overlay hidden">
+  <!-- Screen 4: Dedicated Product History / Batch Ledger Screen -->
+  <main id="product-detail-screen" class="app-container hidden">
+    <header class="sub-header">
+      <button onclick="backToModule()" class="icon-btn">‹</button>
+      <h2 id="detail-product-name">Product History</h2>
+      <div style="width: 36px;"></div>
+    </header>
+
+    <!-- Product Summary Card -->
+    <section class="detail-summary-card">
+      <div class="detail-stat">
+        <span class="label">Active Batches</span>
+        <h4 id="detail-active-count">0</h4>
+      </div>
+      <div class="detail-stat">
+        <span class="label">Future Profit</span>
+        <h4 id="detail-future-profit" class="future-color">₹ 0</h4>
+      </div>
+      <div class="detail-stat">
+        <span class="label">Realized Profit</span>
+        <h4 id="detail-realized-profit" class="earned-color">₹ 0</h4>
+      </div>
+    </section>
+
+    <!-- Quick Action to Restock this exact product -->
+    <div style="margin-bottom: 16px;">
+      <button id="restock-current-btn" class="secondary-btn" onclick="openRestockCurrentModal()">+ Add New Batch for This Item</button>
+    </div>
+
+    <!-- Batch Records List -->
+    <div class="batch-section-title">All Batches (Active & Past)</div>
+    <div id="detail-batches-list" class="items-list"></div>
+  </main>
+
+  <!-- Stock Entry & Edit Modal -->
+  <div id="stock-modal" class="modal-overlay hidden">
     <div class="modal-card">
       <div class="modal-header">
         <h3 id="modal-heading">New Stock Entry</h3>
         <button onclick="closeModal()" class="close-btn">✕</button>
       </div>
 
-      <!-- Quick Preset Pills (for Petrol / Fertilizer) -->
+      <!-- Quick Preset Pills (Petrol / Fertilizer) -->
       <div id="preset-pills" class="presets-row hidden"></div>
 
-      <form id="stock-form" onsubmit="handleFormSubmit(event)">
+      <form id="stock-form" onsubmit="handleFormSave(event)">
+        <input type="hidden" id="edit-batch-id">
+
         <div class="input-group">
           <label>Product / Item Name</label>
           <input type="text" id="form-name" placeholder="Enter name" required autocomplete="off">
         </div>
 
-        <!-- Mode A: Grocery & Fertilizer Inputs (Cost Price & Selling Price) -->
+        <!-- Mode A: Standard (Cost Price & Selling Price) -->
         <div id="mode-standard-inputs" class="input-row">
           <div class="input-group">
             <label>Cost Price (₹)</label>
@@ -144,7 +180,7 @@
           </div>
         </div>
 
-        <!-- Mode B: Petrol & Diesel Inputs (Liters & Profit Per Liter) -->
+        <!-- Mode B: Fuel (Liters & Profit Per Liter) -->
         <div id="mode-fuel-inputs" class="input-row hidden">
           <div class="input-group">
             <label>Total Liters (L)</label>
@@ -157,11 +193,11 @@
         </div>
 
         <div class="profit-preview">
-          <span>Expected Profit:</span>
+          <span>Profit for this batch:</span>
           <strong id="form-profit-preview">₹ 0</strong>
         </div>
 
-        <button type="submit" class="submit-btn">Save to Active Stock</button>
+        <button type="submit" id="modal-submit-btn" class="submit-btn">Save to Active Stock</button>
       </form>
     </div>
   </div>
